@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import struct
 
 
 # -------------------------------------------------------------------
@@ -14,6 +15,8 @@ SWISS_MEAN_PATH = DATA_DIR / "climate-data-swissmean_regSwiss_1.4.txt"
 
 METEOSWISS_META_DIR = DATA_DIR / "meteoswiss_nbcn_meta"
 METEOSWISS_YEARLY_DIR = DATA_DIR / "meteoswiss_nbcn_yearly"
+
+GLACIER_BASE_DIR = DATA_DIR / "glaciers"
 
 PARAM_TEMP_YEAR = "ths200y0"  # homogenisierte Jahresmitteltemperatur
 
@@ -271,6 +274,132 @@ def make_fig2(trend_df: pd.DataFrame):
 
     return fig
 
+# -------------------------------------------------------------------
+# Glaciers
+# -------------------------------------------------------------------
+def _read_shp_polygon_areas(shp_path: Path) -> float:
+    """
+    Reads a .shp file containing Polygon geometries and computes
+    total area using the shoelace formula.
+
+    Works only with simple SHP polygons (SGI polygons are simple).
+    """
+    with open(shp_path, "rb") as f:
+        # skip 100-byte shapefile header
+        f.read(100)
+
+        total_area = 0.0
+
+        while True:
+            # Each record header = 8 bytes (big endian)
+            header = f.read(8)
+            if not header:
+                break  # end of file
+
+            # content length (in 16-bit words)
+            _, content_length_words = struct.unpack(">2i", header)
+            content_length_bytes = content_length_words * 2
+
+            content = f.read(content_length_bytes)
+            if not content:
+                break
+
+            # first 4 bytes = shape type (little endian)
+            shape_type = struct.unpack("<i", content[:4])[0]
+            if shape_type != 5:  # 5 = Polygon
+                continue
+
+            # Polygon structure:
+            # bytes 4–36: bounding box (ignored)
+            # bytes 36–40: numParts (int)
+            # bytes 40–44: numPoints (int)
+            # bytes 44–...: parts indices + points
+
+            num_parts = struct.unpack("<i", content[36:40])[0]
+            num_points = struct.unpack("<i", content[40:44])[0]
+
+            # parts array
+            parts_offset = 44
+            parts = []
+            for i in range(num_parts):
+                part_index = struct.unpack("<i", content[parts_offset + 4*i : parts_offset + 4*(i+1)])[0]
+                parts.append(part_index)
+            parts.append(num_points)  # final boundary end
+
+            # points start after parts: offset = 44 + 4*num_parts
+            points_offset = 44 + 4 * num_parts
+            points = []
+            for i in range(num_points):
+                x, y = struct.unpack(
+                    "<2d",
+                    content[points_offset + 16*i : points_offset + 16*(i+1)]
+                )
+                points.append((x, y))
+
+            # compute area of each part using shoelace formula
+            for p in range(num_parts):
+                start = parts[p]
+                end = parts[p+1]
+
+                pts = points[start:end]
+                xs = np.array([p[0] for p in pts])
+                ys = np.array([p[1] for p in pts])
+
+                # shoelace polygon area
+                area = 0.5 * abs(np.dot(xs, np.roll(ys, -1)) - np.dot(ys, np.roll(xs, -1)))
+                total_area += area
+
+        # shapefile coordinates are in meters → convert to km²
+        return total_area / 1_000_000
+
+def load_glacier_inventory_totals(base_dir: Path = GLACIER_BASE_DIR) -> pd.DataFrame:
+    rows = []
+
+    for shp in sorted(base_dir.rglob("SGI_*.shp")):
+        year = int(shp.stem.split("_")[1])  # SGI_1931 → 1931
+        total_area_km2 = _read_shp_polygon_areas(shp)
+        rows.append({"year": year, "total_area_km2": total_area_km2})
+
+    if not rows:
+        return pd.DataFrame(columns=["year", "total_area_km2"])
+
+    return pd.DataFrame(rows).sort_values("year")
+
+def make_fig_glaciers(glaciers_df: pd.DataFrame):
+    if glaciers_df.empty:
+        return None
+
+    fig = px.line(
+        glaciers_df,
+        x="year",
+        y="total_area_km2",
+        markers=True,
+        labels={
+            "year": "Inventarjahr",
+            "total_area_km2": "Gesamt-Gletscherfläche [km²]",
+        },
+        title="Rückgang der Gletscherfläche in der Schweiz",
+    )
+
+    # Turn line chart into an area chart
+    fig.update_traces(
+        line=dict(width=3),
+        fill="tozeroy",  # fill from line down to zero
+    )
+
+    # Ensure y-axis always begins at zero
+    fig.update_yaxes(range=[0, glaciers_df["total_area_km2"].max() * 1.05])
+
+    fig.update_layout(
+        template="plotly_white",
+        hovermode="x unified",
+    )
+
+    return fig
+
+
+
+
 
 # -------------------------------------------------------------------
 # Convenience: alles vorbereiten
@@ -286,4 +415,9 @@ def prepare_all():
     trend_df = enrich_trend_with_meta(trend_df)
     fig2 = make_fig2(trend_df)
 
-    return ch, fig1, trend_df, fig2, warming_since_start, latest_year
+    # Glaciers
+    glaciers_df = load_glacier_inventory_totals()
+    fig3 = make_fig_glaciers(glaciers_df) if not glaciers_df.empty else None
+
+    return ch, fig1, trend_df, fig2, warming_since_start, latest_year, glaciers_df, fig3
+

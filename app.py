@@ -3,7 +3,16 @@ import streamlit as st
 from climate_core import prepare_all
 
 # Daten + Figuren vorbereiten (wird nur einmal pro Run gemacht)
-ch, fig1, trend_df, fig2, warming_since_start, latest_year = prepare_all()
+(
+    ch,
+    fig1,
+    trend_df,
+    fig2,
+    warming_since_start,
+    latest_year,
+    glaciers_df,
+    fig3,
+) = prepare_all()
 
 # -----------------------------------------------------------
 # Streamlit Layout
@@ -96,21 +105,39 @@ st.caption(
 st.markdown("---")
 
 # -----------------------------------------------------------
-# Abschnitt 3 – Platz für Schnee & Gletscher Charts deines Kollegen
+# Abschnitt 3 – Schnee & Gletscher
 # -----------------------------------------------------------
 st.subheader("3 · Was bedeutet das für Schnee und Gletscher?")
 
-st.markdown(
-    """
-Hier können die nächsten beiden Grafiken folgen, z.B.:
+col1, col2 = st.columns([1.1, 1])
 
-- Entwicklung von **Schneetagen / Schneehöhen** an ausgewählten Stationen  
-- Rückzug der **Gletscherfläche oder Eismasse** in den letzten Jahrzehnten  
+with col1:
+    if fig3 is not None:
+        st.plotly_chart(fig3, use_container_width=True)
+    else:
+        st.warning("Keine Gletscher-Shapefiles gefunden.")
 
-Weniger kalte Tage und kürzere Schneesaisons führen dazu, dass:
+with col2:
+    st.markdown(
+        """
+Die Grafik zeigt die **Gesamtfläche aller Gletscher in der Schweiz** pro Inventarjahr.
+Jeder Punkt entspricht einer vollständigen Aufnahme des Schweizer Gletscherinventars
+(z. B. **1931**).
 
-- Wintertourismus auf tieferen Lagen unter Druck gerät  
-- Gletscher massiv an Volumen verlieren und im Sommer immer mehr Schmelzwasser liefern  
-- sich Naturgefahren verändern – z.B. durch auftauenden Permafrost oder neue Seen an Gletscherfronten.
-"""
+Die Botschaft:
+
+- Selbst über wenige Inventare hinweg ist ein **klarer Rückgang der Gletscherfläche** sichtbar.  
+- Wärmere Jahre bedeuten eine **kürzere Schneesaison** und mehr Schmelze im Sommer.  
+- Langfristig verschwinden kleinere Gletscher ganz, größere ziehen sich stark zurück.
+
+Das hat Folgen für:
+
+- **Wasserhaushalt:** mehr Schmelzwasser im Sommer heute, weniger Eisreserve in Zukunft  
+- **Tourismus:** Skigebiete auf tieferen Lagen verlieren an Schneesicherheit  
+- **Naturgefahren:** neue Gletscherseen, instabile Hänge und auftauender Permafrost
+        """
+    )
+
+st.caption(
+    "Daten: Schweizer Gletscherinventar (SGI), Summen der Flächen aller Gletscher pro Inventarjahr."
 )
