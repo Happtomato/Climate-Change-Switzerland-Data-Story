@@ -4,14 +4,11 @@ from climate_core import prepare_all
 
 # Daten + Figuren vorbereiten (wird nur einmal pro Run gemacht)
 (
-    ch,
-    fig1,
-    trend_df,
-    fig2,
-    warming_since_start,
-    latest_year,
-    glaciers_df,
-    fig3,
+    ch, fig1,
+    trend_df, fig2,
+    warming_since_start, latest_year,
+    glaciers_df, fig3,
+    snow_df, fig4,
 ) = prepare_all()
 
 # -----------------------------------------------------------
@@ -140,4 +137,29 @@ Das hat Folgen für:
 
 st.caption(
     "Daten: Schweizer Gletscherinventar (SGI), Summen der Flächen aller Gletscher pro Inventarjahr."
+)
+# -----------------------------------------------------------
+# Abschnitt 4 – Schneetage in der Schweiz
+# -----------------------------------------------------------
+st.subheader("4 · Wie verändern sich die Schneetage in der Schweiz?")
+
+if fig4 is not None:
+    st.plotly_chart(fig4, use_container_width=True)
+else:
+    st.warning("Keine Schneetage-Daten in 'data/snow/' gefunden.")
+
+st.markdown(
+    """
+Hier siehst du die **durchschnittliche Anzahl von Tagen pro Jahr**, an denen
+die gemessene Schneehöhe um 6 UTC grösser als 0 cm war.
+
+Vorgehen:
+
+- Für jede Station und jedes Jahr wird gezählt, an wie vielen Tagen `gemessene Schneehöhe um 6 UTC > 0` war  
+  (fehlende Werte werden als 0 behandelt).  
+- Diese Anzahl wird dann über alle verfügbaren Stationen gemittelt.
+
+So erkennst du, wie stark die **Schneetage im Mittel abnehmen** – ergänzend zum Rückgang
+der Gletscherfläche aus der Grafik darüber.
+"""
 )
