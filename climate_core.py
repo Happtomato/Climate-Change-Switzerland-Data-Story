@@ -23,6 +23,12 @@ NIME_META_STATIONS_URL = (
     "https://data.geo.admin.ch/ch.meteoschweiz.ogd-nime/ogd-nime_meta_stations.csv"
 )
 
+SMN_TEMP_DIR = DATA_DIR / "temperature"
+PARAM_TMAX_ABS = "tre200yx"
+SMN_META_PATH = DATA_DIR / "temperature" / "ogd-smn_meta_stations.csv"
+
+
+
 PARAM_TEMP_YEAR = "ths200y0"  # homogenisierte Jahresmitteltemperatur
 
 
@@ -669,8 +675,8 @@ def load_snow_days_from_nime(base_dir: Path = SNOW_DIR) -> pd.DataFrame:
 
     all_sy = pd.concat(per_station_year, ignore_index=True)
 
-    # Auf Jahre ab 1931 beschränken
-    all_sy = all_sy[all_sy["year"] >= 1931]
+    # Auf Jahre ab 1966 beschränken
+    all_sy = all_sy[all_sy["year"] >= 1966]
     if all_sy.empty:
         return pd.DataFrame(
             columns=[
@@ -687,7 +693,7 @@ def load_snow_days_from_nime(base_dir: Path = SNOW_DIR) -> pd.DataFrame:
         subset=["height_masl", "region_class"]
     )
 
-    start_year = 1931
+    start_year = 1966
     end_year = int(all_sy["year"].max())
     full_years = end_year - start_year + 1
 
@@ -800,6 +806,135 @@ def make_fig_snow_days(snow_df: pd.DataFrame):
 
     return fig
 
+# -------------------------------------------------------------------
+# Max temperature per year
+# -------------------------------------------------------------------
+def load_smn_absolute_max_temperature(
+    base_dir: Path = SMN_TEMP_DIR,
+) -> pd.DataFrame:
+    """
+    Loads yearly SMN station files and extracts
+    absolute annual max temperature (tre200yx / tre200y0x).
+
+    Returns mean per year for:
+      - Mittelland (< 1000 m)
+      - Alpen (>= 1000 m)
+    """
+
+    files = sorted(base_dir.glob("ogd-smn_*_y.csv"))
+    print(f"SMN files found: {len(files)}")
+
+    if not files:
+        return pd.DataFrame()
+
+    # Load SMN metadata
+    meta = pd.read_csv(
+        "https://data.geo.admin.ch/ch.meteoschweiz.ogd-smn/ogd-smn_meta_stations.csv",
+        sep=";",
+        encoding="latin1",
+    )
+
+    meta = meta[["station_abbr", "station_height_masl"]].dropna()
+    meta["station_abbr"] = meta["station_abbr"].str.upper()
+
+    rows = []
+
+    for path in files:
+        try:
+            df = pd.read_csv(path, sep=";", encoding="latin1")
+        except Exception:
+            continue
+
+        # --- 1. parameter must exist ---
+        if "tre200yx" not in df.columns:
+            continue
+
+        # --- 2. determine year column ---
+        if "year" in df.columns:
+            year = df["year"]
+        elif "year_end" in df.columns:
+            year = df["year_end"]
+        elif "year_start" in df.columns:
+            year = df["year_start"]
+        elif "time" in df.columns:
+            year = pd.to_datetime(df["time"], errors="coerce").dt.year
+        elif "reference_timestamp" in df.columns:
+            year = pd.to_datetime(
+                df["reference_timestamp"], errors="coerce"
+            ).dt.year
+        else:
+            continue
+
+        sub = pd.DataFrame({
+            "year": year,
+            "tmax_abs": df["tre200yx"],
+        }).dropna()
+
+        if sub.empty:
+            continue
+
+        station = path.stem.split("_")[1].upper()
+        sub["station_abbr"] = station
+
+        rows.append(sub)
+
+    print(f"Rows before merge: {len(rows)}")
+
+    if not rows:
+        return pd.DataFrame()
+
+    all_df = pd.concat(rows, ignore_index=True)
+
+    # merge height info
+    all_df = all_df.merge(meta, on="station_abbr", how="left")
+    all_df = all_df.dropna(subset=["station_height_masl"])
+
+    # region split
+    all_df["region"] = np.where(
+        all_df["station_height_masl"] >= 1000,
+        "Alpen",
+        "Mittelland",
+    )
+
+    out = (
+        all_df
+        .groupby(["year", "region"])["tmax_abs"]
+        .mean()
+        .reset_index()
+    )
+
+    print("Final SMN rows:", len(out))
+    print(out.head())
+
+    return out
+
+
+
+def make_fig_absolute_max_temperature(temp_df: pd.DataFrame):
+    if temp_df.empty:
+        return None
+
+    fig = px.line(
+        temp_df,
+        x="year",
+        y="tmax_abs",
+        color="region",
+        markers=True,
+        labels={
+            "year": "Jahr",
+            "tmax_abs": "Absolute Jahres-Höchsttemperatur [°C]",
+            "region": "Region",
+        },
+        title="Zunahme der jährlichen Extremhitze in der Schweiz",
+    )
+
+    fig.update_traces(line=dict(width=3))
+    fig.update_layout(
+        template="plotly_white",
+        hovermode="x unified",
+    )
+
+    return fig
 
 
 # -------------------------------------------------------------------
@@ -824,10 +959,15 @@ def prepare_all():
     snow_df = load_snow_days_from_nime()
     fig4 = make_fig_snow_days(snow_df)
 
+    # Absolute annual max temperature (SMN)
+    temp_max_df = load_smn_absolute_max_temperature()
+    fig6 = make_fig_absolute_max_temperature(temp_max_df)
+
     return (
         ch, fig1,
         trend_df, fig2,
         warming_since_start, latest_year,
         glaciers_df, fig3,
         snow_df, fig4,
+        temp_max_df, fig6,
     )

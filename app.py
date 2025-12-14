@@ -9,7 +9,10 @@ from climate_core import prepare_all
     warming_since_start, latest_year,
     glaciers_df, fig3,
     snow_df, fig4,
+    temp_max_df, fig6,
 ) = prepare_all()
+
+
 
 # -----------------------------------------------------------
 # Streamlit Layout
@@ -151,15 +154,51 @@ else:
 st.markdown(
     """
 Hier siehst du die **durchschnittliche Anzahl von Tagen pro Jahr**, an denen
-die gemessene Schneehöhe um 6 UTC grösser als 0 cm war.
+**Neuschnee gefallen ist**.
 
-Vorgehen:
+Ein Schneetag wird gezählt, wenn die **Neuschneehöhe (Tagessumme von 6 UTC bis
+6 UTC des Folgetages) grösser als 0 cm** war.  
 
-- Für jede Station und jedes Jahr wird gezählt, an wie vielen Tagen `gemessene Schneehöhe um 6 UTC > 0` war  
-  (fehlende Werte werden als 0 behandelt).  
-- Diese Anzahl wird dann über alle verfügbaren Stationen gemittelt.
+**Vorgehen:**
 
-So erkennst du, wie stark die **Schneetage im Mittel abnehmen** – ergänzend zum Rückgang
-der Gletscherfläche aus der Grafik darüber.
+- Für jede Station und jedes Jahr wird gezählt, an wie vielen Tagen  
+  `Neuschneehöhe (6 UTC–6 UTC) > 0 cm` war.  
+  Fehlende Werte werden **ignoriert** und nicht als 0 gewertet.
+- Diese jährlichen Schneetage werden anschliessend über alle verfügbaren
+  Stationen gemittelt.
+- Die Auswertung erfolgt getrennt für **Mittelland** und **Alpen**.
+
+So wird sichtbar, wie sich die **Häufigkeit von Neuschneetagen** im Laufe der
+Zeit verändert hat und wie deutlich der Rückgang im Mittelland im Vergleich
+zu den Alpen ausfällt.
+"""
+)
+
+# -----------------------------------------------------------
+# Abschnitt 5 - Die Jahre werden wärmer
+# -----------------------------------------------------------
+st.markdown("---")
+st.subheader("5 · Extreme Hitze wird häufiger")
+
+if fig6 is not None:
+    st.plotly_chart(fig6, use_container_width=True)
+else:
+    st.warning("Keine Daten zur Extremtemperatur verfügbar.")
+
+st.markdown(
+    """
+Diese Grafik zeigt die **mittlere absolute Jahres-Höchsttemperatur**
+(2 m über Boden) – getrennt nach **Mittelland** und **Alpen**.
+
+**Einordnung:**
+
+- Die höchsten Temperaturen steigen **in beiden Regionen** deutlich.  
+- Im **Mittelland** sind Extremwerte häufiger und höher.  
+- Auch die **Alpen erreichen zunehmend kritische Hitzegrenzen**, was
+  Auswirkungen auf Ökosysteme, Gletscher und Infrastruktur hat.
+
+Damit schliesst sich der Kreis:
+Die Erwärmung zeigt sich nicht nur im Mittel –  
+**sondern besonders stark in den Extremwerten.**
 """
 )
