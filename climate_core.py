@@ -727,6 +727,182 @@ def make_fig_absolute_max_temperature(temp_df: pd.DataFrame):
     fig.update_layout(template="plotly_white", hovermode="x unified")
     return fig
 
+CANTON_MAP = {
+    1: "Zurich (ZH)",
+    2: "Bern (BE)",
+    3: "Lucerne (LU)",
+    4: "Uri (UR)",
+    5: "Schwyz (SZ)",
+    6: "Obwalden (OW)",
+    7: "Nidwalden (NW)",
+    8: "Glarus (GL)",
+    9: "Zug (ZG)",
+    10: "Fribourg (FR)",
+    11: "Solothurn (SO)",
+    12: "Basel-Stadt (BS)",
+    13: "Basel-Landschaft (BL)",
+    14: "Schaffhausen (SH)",
+    15: "Appenzell A.Rh. (AR)",
+    16: "Appenzell I.Rh. (AI)",
+    17: "St. Gallen (SG)",
+    18: "Graubünden (GR)",
+    19: "Aargau (AG)",
+    20: "Thurgau (TG)",
+    21: "Ticino (TI)",
+    22: "Vaud (VD)",
+    23: "Valais (VS)",
+    24: "Neuchâtel (NE)",
+    25: "Geneva (GE)",
+    26: "Jura (JU)",
+}
+
+TOURISM_CANTON_PATH = DATA_DIR / "tourism" / "bfs_hotel_overnight_stays_cantons_monthly.csv"
+
+
+def load_tourism_canton_monthly(path: Path = TOURISM_CANTON_PATH) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+
+    df = pd.read_csv(path)
+
+    # --- FORCE TYPES ROBUSTLY ---
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df["month"] = pd.to_numeric(df["month"], errors="coerce")
+    df["Kanton"] = pd.to_numeric(df["Kanton"], errors="coerce")
+    df["Indikator"] = pd.to_numeric(df["Indikator"], errors="coerce")
+
+    # Herkunftsland can be read as 0 instead of "00" -> normalize to 2-digit strings
+    df["Herkunftsland"] = df["Herkunftsland"].astype(str).str.zfill(2)
+
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+
+    df = df.dropna(subset=["year", "month", "Kanton", "Indikator", "value"]).copy()
+
+    df["year"] = df["year"].astype(int)
+    df["month"] = df["month"].astype(int)
+    df["Kanton"] = df["Kanton"].astype(int)
+    df["Indikator"] = df["Indikator"].astype(int)
+
+    # --- FILTER ---
+    df = df[(df["Indikator"] == 2) & (df["Herkunftsland"] == "00")].copy()
+
+    df["canton_name"] = df["Kanton"].map(CANTON_MAP)
+
+    df = df.dropna(subset=["canton_name"])
+    return df
+
+
+def compute_seasonal_tourism_by_canton(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame()
+
+    # Summer: Jun–Sep
+    summer = (
+        df[df["month"].isin([6, 7, 8, 9])]
+        .groupby(["year", "canton_name"])["value"]
+        .sum()
+        .reset_index()
+    )
+    summer["season"] = "Summer"
+
+    # Winter: Dec–Mar (Dec belongs to next year)
+    w = df[df["month"].isin([12, 1, 2, 3])].copy()
+    w["season_year"] = w["year"]
+    w.loc[w["month"] == 12, "season_year"] += 1
+
+    winter = (
+        w.groupby(["season_year", "canton_name"])["value"]
+        .sum()
+        .reset_index()
+        .rename(columns={"season_year": "year"})
+    )
+    winter["season"] = "Winter"
+
+    return pd.concat([summer, winter], ignore_index=True)
+
+def compute_season_balance_by_canton(tourism_canton_df: pd.DataFrame) -> pd.DataFrame:
+    season_df = compute_seasonal_tourism_by_canton(tourism_canton_df)
+    if season_df.empty:
+        return pd.DataFrame()
+
+    wide = (
+        season_df.pivot_table(
+            index=["year", "canton_name"],
+            columns="season",
+            values="value",
+            aggfunc="sum",
+        )
+        .reset_index()
+    )
+
+    if "Summer" not in wide.columns:
+        wide["Summer"] = np.nan
+    if "Winter" not in wide.columns:
+        wide["Winter"] = np.nan
+
+    wide = wide.dropna(subset=["Summer", "Winter"]).copy()
+    wide["total"] = wide["Summer"] + wide["Winter"]
+    wide = wide[wide["total"] > 0].copy()
+
+    # balance in [-1, +1]
+    wide["season_balance"] = (wide["Summer"] - wide["Winter"]) / wide["total"]
+    wide["abs_balance"] = wide["season_balance"].abs()
+
+    return wide.sort_values(["canton_name", "year"])
+
+def make_fig_season_balance_heatmap(balance_df: pd.DataFrame, top_n: int = 26):
+    if balance_df.empty:
+        return None
+
+    df = balance_df.copy()
+
+    # keep top cantons by tourism volume (or all 26)
+    top = (
+        df.groupby("canton_name")["total"].sum()
+        .sort_values(ascending=False)
+        .head(top_n)
+        .index
+    )
+    df = df[df["canton_name"].isin(top)].copy()
+
+    # sort cantons by long-run average season balance (summer-heavy -> winter-heavy)
+    order = (
+        df.groupby("canton_name")["season_balance"]
+        .mean()
+        .sort_values(ascending=False)
+        .index
+        .tolist()
+    )
+    df["canton_name"] = pd.Categorical(df["canton_name"], categories=order, ordered=True)
+
+    pivot = df.pivot_table(index="canton_name", columns="year", values="season_balance", aggfunc="mean")
+
+    # stronger contrast: narrow the visible range
+    r = 0.40  # try 0.35 if you want even stronger
+    fig = px.imshow(
+        pivot,
+        aspect="auto",
+        color_continuous_scale="RdBu_r",  # red = summer-heavy, blue = winter-heavy
+        zmin=-r,
+        zmax=r,
+        labels=dict(x="Year", y="Canton (summer-heavy → winter-heavy)", color="Season balance"),
+        title="Seasonal balance of tourism by canton over time (red = summer-heavy, blue = winter-heavy)",
+    )
+
+    fig.update_layout(
+        template="plotly_white",
+        height=900,
+        margin=dict(l=10, r=10, t=80, b=10),
+        coloraxis_colorbar=dict(
+            title="(Summer − Winter) / Total",
+            tickformat=".2f",
+        ),
+    )
+
+    return fig
+
+
+
 
 # -------------------------------------------------------------------
 # Convenience: prepare everything
@@ -754,6 +930,11 @@ def prepare_all():
     temp_max_df = load_smn_absolute_max_temperature()
     fig6 = make_fig_absolute_max_temperature(temp_max_df)
 
+    tourism_canton_df = load_tourism_canton_monthly()
+
+    balance_df = compute_season_balance_by_canton(tourism_canton_df)
+    fig8 = make_fig_season_balance_heatmap(balance_df, top_n=26)
+
     return (
         ch,
         fig1,
@@ -767,4 +948,6 @@ def prepare_all():
         fig4,
         temp_max_df,
         fig6,
+        balance_df,
+        fig8,
     )

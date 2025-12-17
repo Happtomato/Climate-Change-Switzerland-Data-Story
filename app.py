@@ -18,6 +18,8 @@ from climate_core import prepare_all
     fig4,
     temp_max_df,
     fig6,
+    season_balance_df,
+    fig8,
 ) = prepare_all()
 
 # -------------------------------------------------------------------
@@ -84,7 +86,7 @@ By the most recent full year (**{latest_year}**), the trend is unmistakable: Swi
     )
 
 with col2:
-    st.plotly_chart(fig1, use_container_width=True)
+    st.plotly_chart(fig1, width="stretch")
 
 st.caption(
     "Data: homogenized Swiss mean temperature. Baseline: 1961–1990. "
@@ -99,7 +101,7 @@ st.markdown("---")
 col1, col2 = st.columns([1, 1.1])
 
 with col1:
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
 
 with col2:
     st.subheader("2 · The geography of warming")
@@ -142,7 +144,7 @@ col1, col2 = st.columns([1.1, 1])
 
 with col1:
     if fig3 is not None:
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width="stretch")
     else:
         st.warning("No glacier shapefiles found.")
 
@@ -183,7 +185,7 @@ st.markdown("---")
 st.subheader("4 · Snow: the season that is slipping")
 
 if fig4 is not None:
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4, width="stretch")
 else:
     st.warning("No snow-day data found in 'data/snow/'.")
 
@@ -219,7 +221,7 @@ st.markdown("---")
 st.subheader("5 · When the hottest day gets hotter")
 
 if fig6 is not None:
-    st.plotly_chart(fig6, use_container_width=True)
+    st.plotly_chart(fig6, width="stretch")
 else:
     st.warning("No extreme temperature data available.")
 
@@ -234,16 +236,92 @@ In the lowlands, higher extremes increase the likelihood of heat stress, especia
 In the Alps, rising extremes matter because they push heat into places and seasons that historically stayed cooler.
 That can accelerate glacier melt, stress cold-adapted ecosystems, and affect infrastructure built for different temperature ranges.
 
-Taken together, the five panels on this page point to the same conclusion.
+Taken together, the panels on this page point to the same conclusion.
 Switzerland’s climate is shifting upward in the mean, across the map, in snow reliability, in glacier stability, and in the hottest days of the year.
 And because the country’s geography links mountains and lowlands, these changes don’t stay confined to one region: they cascade.
 """
 )
 
+st.markdown("---")
+
+# -------------------------------------------------------------------
+# Section 6 Tourism
+# -------------------------------------------------------------------
+st.subheader("6 · Tourism patterns: winter resorts and year-round cantons")
+
 st.markdown(
     """
-If you want a single mental image to carry forward, make it this:
-a warmer baseline lifts everything the average year, the extreme years, the rain–snow boundary, and the long-term balance of ice.
-Once you see those pieces together, the story becomes hard to unsee.
+Tourism is one of the clearest examples of how climate signals translate into everyday life and economic activity.
+But tourism does not respond to temperature alone. Demand is shaped by many factors (prices, infrastructure, global travel trends),
+so the goal here is not to “prove” a single cause, but to look for patterns that are consistent with the climate changes shown above.
+
+To make seasonality easy to read, the chart summarizes each canton and year with a single indicator:
+
+- **Red** means a canton is **more summer-oriented** in that year.
+- **Blue** means a canton is **more winter-oriented** in that year.
+- **White** means tourism is **roughly balanced** between summer and winter.
+
+Cantons are sorted from **more summer-heavy (top)** to **more winter-heavy (bottom)** based on their long-run average.
+"""
+)
+
+st.caption("Red = more summer tourism • Blue = more winter tourism • White ≈ balanced")
+
+if fig8 is not None:
+    st.plotly_chart(fig8, width="stretch")
+else:
+    st.warning("Tourism figure is empty. Showing raw tourism data preview.")
+    st.dataframe(season_balance_df.head(50))
+
+st.markdown(
+    """
+Several patterns stand out immediately.
+
+Warm and lake-oriented destinations such as **Ticino** tend to remain strongly **summer-dominated**.
+In contrast, alpine cantons that historically rely more on snow-based activities show a more **winter-oriented** profile.
+This difference is expected: the tourism “climate” of a canton is shaped by elevation, landscape, and what visitors come for.
+
+The second layer is time. In many cantons, the balance becomes slightly more **summer-leaning** in recent years.
+This should be interpreted carefully: it does not necessarily mean winter tourism is collapsing everywhere.
+Rather, it suggests that **summer has gained relative weight** and winter has become **more variable** a pattern that fits with the
+warming trend and the declining reliability of snow shown earlier in this story.
+"""
+)
+
+st.caption(
+    "Data: Swiss Federal Statistical Office (BFS), STAT-TAB PxWeb "
+    "table px-x-1003020000_102 (hotel overnight stays, total visitors)."
+)
+
+st.markdown("---")
+
+# -------------------------------------------------------------------
+# Conclusion
+# -------------------------------------------------------------------
+st.subheader("Conclusion · One climate signal, many connected changes")
+
+st.markdown(
+    f"""
+This data story started with a long temperature record and ended with a set of consequences that connect directly to Switzerland’s landscapes
+and to daily life.
+
+The Swiss mean temperature series shows a clear shift toward a warmer climate, reaching about **{warming_since_start:.1f} °C** of warming
+between the earliest decades of measurements and the most recent decade. That signal is not limited to one place: the station-based trends
+show warming across the country.
+
+From there, the impacts become easier to see. Snow is highly sensitive around the freezing point, so even modest warming changes whether precipitation
+falls as snow or rain and how long snow persists. In the snow-day record, this appears as declining snow reliability, especially at lower elevations.
+Glaciers respond more slowly, but they integrate many seasons at once and the glacier inventory shows a continued decline in total glacier area,
+which is difficult to reverse on human timescales.
+
+Extremes matter too. Rising maximum temperatures raise the likelihood of heat stress in populated lowlands and push warmth into higher terrain,
+affecting ecosystems and accelerating melt processes. Finally, the tourism seasonality analysis adds a human dimension:
+some cantons remain structurally summer-oriented, while alpine regions show stronger winter dependence, and recent years in many cantons lean slightly
+more toward summer activity.
+
+No single diagram tells the full story. But together, temperature trends, snow, glaciers, extremes, and tourism point in the same direction:
+Switzerland’s climate baseline has shifted, and the effects cascade through both natural systems and climate-sensitive sectors.
+The key challenge going forward is not recognizing the signal it is adapting infrastructure, risk management, and economic planning to a climate
+that is no longer the one Switzerland was built around.
 """
 )
