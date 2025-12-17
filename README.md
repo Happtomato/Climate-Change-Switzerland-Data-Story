@@ -62,7 +62,7 @@ All data is processed locally from official Swiss open-data sources (MeteoSwiss,
 ### 1️⃣ Clone the repository
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/Happtomato/Climate-Change-Switzerland-Data-Story
 cd Climate-Change-Switzerland-Data-Story
 ```
 
