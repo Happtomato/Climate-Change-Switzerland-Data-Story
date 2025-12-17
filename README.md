@@ -9,9 +9,9 @@ The goal of the project is not only to present data, but to **tell a coherent st
 
 ## 🎓 Course Context
 
-* **Course:** DVIZ – Data Visualization
+* **Course:** I.BA_DVIZ_MM.H2501 / DATA VISUALIZATION FOR AI AND ML
 * **Project type:** Final group project
-* **Institution:** (add your university / FH if needed)
+* **Institution:** Lucerne University of Applied Sciences and Arts (HSLU)
 
 ### 👥 Group Members
 
